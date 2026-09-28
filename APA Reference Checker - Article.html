@@ -1,0 +1,1412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>APA 7th Reference Checker</title>
+<style>
+  :root{
+    --bg:#faf8f5; --panel:#ffffff; --ink:#241f1a; --sub:#6b6058;
+    --accent:#8a3b2f; --accent-ink:#ffffff; --line:#e8e1d8;
+    --ok:#3f6d4e; --warn:#a35b1f; --err:#a3341f; --mono:#f4efe8;
+    box-sizing:border-box;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#1c1815; --panel:#252019; --ink:#f1ebe2; --sub:#a99f92;
+      --accent:#e08b6f; --accent-ink:#241f1a; --line:#3a332b;
+      --ok:#8fbf9f; --warn:#e0a95f; --err:#e08b7a; --mono:#211c17;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#1c1815; --panel:#252019; --ink:#f1ebe2; --sub:#a99f92;
+    --accent:#e08b6f; --accent-ink:#241f1a; --line:#3a332b;
+    --ok:#8fbf9f; --warn:#e0a95f; --err:#e08b7a; --mono:#211c17;
+  }
+  *{box-sizing:border-box}
+  html{scroll-padding-top:env(safe-area-inset-top,0px)}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Iowan Old Style","Georgia",serif;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    min-height:100%;
+  }
+  .wrap{max-width:1240px; margin:0 auto; padding:28px 20px 60px;}
+  h1{font-size:1.6rem; margin:0 0 4px; letter-spacing:.2px;}
+  .tag{color:var(--sub); font-size:.92rem; margin:0 0 22px; font-family:system-ui,sans-serif;}
+  label{display:block; font-family:system-ui,sans-serif; font-size:.85rem; color:var(--sub); margin-bottom:6px; text-transform:uppercase; letter-spacing:.06em;}
+  textarea{
+    width:100%; min-height:220px; resize:vertical; padding:14px 16px;
+    background:var(--panel); color:var(--ink); border:1px solid var(--line);
+    border-radius:10px; font-family:"SFMono-Regular",Consolas,monospace; font-size:.92rem;
+    line-height:1.55;
+  }
+  .hint{font-family:system-ui,sans-serif; font-size:.8rem; color:var(--sub); margin-top:8px;}
+  .row{display:flex; gap:12px; align-items:center; margin-top:16px; flex-wrap:wrap;}
+  button{
+    font-family:system-ui,sans-serif; font-weight:600; font-size:.95rem;
+    background:var(--accent); color:var(--accent-ink); border:none;
+    padding:11px 22px; border-radius:8px; cursor:pointer;
+  }
+  label.opt{text-transform:none; letter-spacing:0; display:flex; align-items:center; gap:6px; font-family:system-ui,sans-serif; font-size:.85rem; color:var(--sub); margin:0; cursor:pointer;}
+  label.opt input{margin:0;}
+  button.secondary{background:transparent; color:var(--sub); border:1px solid var(--line);}
+  button:active{transform:translateY(1px);}
+  .count{font-family:system-ui,sans-serif; font-size:.82rem; color:var(--sub);}
+  #results{margin-top:32px; display:flex; flex-direction:column; gap:20px;}
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:18px 20px;
+  }
+  .card h3{margin:0 0 10px; font-size:.85rem; font-family:system-ui,sans-serif;
+    color:var(--sub); text-transform:uppercase; letter-spacing:.06em; font-weight:600;}
+  .ref-block{margin-bottom:12px;}
+  .ref-label{font-family:system-ui,sans-serif; font-size:.72rem; color:var(--sub); text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px;}
+  .ref-text{background:var(--mono); border-radius:8px; padding:12px 14px; line-height:1.6; word-break:break-word;}
+  .ref-text.original{color:var(--sub);}
+  .ref-text.corrected{color:var(--ink); border-left:3px solid var(--ok);}
+  ul.issues{margin:10px 0 0; padding-left:1.2em; font-family:system-ui,sans-serif; font-size:.9rem; line-height:1.6;}
+  ul.issues li{margin-bottom:4px;}
+  .sev-err{color:var(--err);}
+  .sev-warn{color:var(--warn);}
+  .sev-note{color:var(--sub);}
+  .clean{font-family:system-ui,sans-serif; color:var(--ok); font-size:.9rem;}
+  .badge{display:inline-block; font-family:system-ui,sans-serif; font-size:.72rem; padding:2px 8px; border-radius:20px; background:var(--line); color:var(--sub); margin-left:8px;}
+  .empty{font-family:system-ui,sans-serif; color:var(--sub); font-size:.9rem; text-align:center; padding:30px 0;}
+  footer{margin-top:36px; font-family:system-ui,sans-serif; font-size:.78rem; color:var(--sub); text-align:center;}
+
+  /* two-pane layout: input (left) | output (right) */
+  .layout{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:22px; align-items:start;}
+  .pane{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px 18px;}
+  .pane-head{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; min-height:34px;}
+  .pane-head .title{font-family:system-ui,sans-serif; font-size:.85rem; color:var(--sub); text-transform:uppercase; letter-spacing:.06em; font-weight:600;}
+  #inputPane{order:-1;}                   /* input on the left, output on the right */
+  .pane textarea{min-height:420px; height:60vh;}
+  #output{background:var(--mono); border-radius:8px; padding:14px 16px; min-height:420px; max-height:60vh; overflow:auto; border-left:3px solid var(--ok);}
+  #output .ref{margin:0 0 14px; padding-left:2em; text-indent:-2em; line-height:1.65; word-break:break-word;}
+  #output .ref:last-child{margin-bottom:0;}
+  #output .placeholder{color:var(--sub); font-family:system-ui,sans-serif; font-size:.9rem; padding:8px 0;}
+  #status{font-family:system-ui,sans-serif; font-size:.8rem; color:var(--sub); min-height:1.2em; margin-top:8px;}
+  button.copy{white-space:nowrap; padding:7px 16px; font-size:.85rem;}
+  button.copy:disabled{opacity:.45; cursor:default;}
+  details.notes{margin-top:14px; font-family:system-ui,sans-serif; font-size:.9rem;}
+  details.notes > summary{cursor:pointer; color:var(--sub); font-size:.85rem;}
+  .note-block{border-top:1px solid var(--line); margin-top:12px; padding-top:10px;}
+  .note-block .nh{font-size:.78rem; color:var(--sub); margin-bottom:4px;}
+  .note-block .nh b{color:var(--ink); font-weight:600;}
+  @media (max-width:860px){
+    .layout{grid-template-columns:1fr;}
+    .pane textarea{min-height:240px; height:40vh;}
+    #output{min-height:200px; max-height:none;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>APA 7th Reference Checker</h1>
+  <p class="tag">Paste your references into the input box (one per entry, or separated by a blank line). The corrected list appears in one box, ready to copy.</p>
+
+  <div class="layout">
+    <section class="pane" id="outputPane" aria-label="Corrected references">
+      <div class="pane-head">
+        <span class="title">Corrected references</span>
+        <button id="copyBtn" class="copy" disabled>Copy all</button>
+      </div>
+      <div id="output" aria-live="polite"><div class="placeholder">Corrected references will appear here.</div></div>
+      <div id="status"></div>
+      <div id="notes"></div>
+    </section>
+
+    <section class="pane" id="inputPane" aria-label="Your references">
+      <div class="pane-head">
+        <span class="title">Your references</span>
+        <span class="count" id="count"></span>
+      </div>
+      <textarea id="input" placeholder="Smith, J. and Jones, A. (2019) The effects of branding on consumer trust. Journal Of Marketing Studies, 12(3) 45-67. http://dx.doi.org/10.1234/jms.2019.045
+
+Doe, J. (2020). Consumer Behaviour In The Digital Age. New York, NY: Wiley."></textarea>
+      <p class="hint">Up to 15 references. Tip: wrap a title or journal name in *asterisks* if you know it should be italic — the tool will keep it.</p>
+      <div class="row">
+        <button id="checkBtn">Check references</button>
+        <button id="clearBtn" class="secondary">Clear</button>
+        <label class="opt"><input type="checkbox" id="doiLookup" checked> Cross-check with Crossref (add missing DOIs, verify year)</label>
+      </div>
+    </section>
+  </div>
+
+  <footer>Rule-based check covering the most common APA 7th formatting issues (author/year format, ampersands, italics, DOIs, sentence case) and the APA 7 book rules (editor as author, no author, edition/volume, publisher name only, no e-reader or database). Always give it a final read against the manual for edge cases like unusual source types.</footer>
+</div>
+
+<script>
+const input = document.getElementById('input');
+const outBox = document.getElementById('output');
+const notesEl = document.getElementById('notes');
+const statusEl = document.getElementById('status');
+const countEl = document.getElementById('count');
+const copyBtn = document.getElementById('copyBtn');
+
+let state = {analyses: [], pending: []};
+
+input.addEventListener('input', updateCount);
+input.addEventListener('keydown', e => { if((e.ctrlKey || e.metaKey) && e.key === 'Enter') runCheck(); });
+function updateCount(){
+  const refs = splitRefs(input.value);
+  countEl.textContent = refs.length ? `${refs.length} reference${refs.length>1?'s':''} detected` : '';
+}
+
+document.getElementById('clearBtn').addEventListener('click', ()=>{
+  input.value=''; countEl.textContent='';
+  state = {analyses: [], pending: []};
+  render();
+});
+document.getElementById('checkBtn').addEventListener('click', runCheck);
+
+// One box with every corrected reference; notes on what changed sit underneath it.
+function render(){
+  if(!state.analyses.length){
+    outBox.innerHTML = '<div class="placeholder">Corrected references will appear here.</div>';
+    notesEl.innerHTML = ''; statusEl.textContent = ''; copyBtn.disabled = true;
+    return;
+  }
+  copyBtn.disabled = false;
+  outBox.innerHTML = state.analyses.map(a => `<p class="ref">${withItalics(a.fixed)}</p>`).join('');
+  const waiting = state.pending.filter(Boolean).length;
+  statusEl.textContent = waiting ? `Cross-checking ${waiting} reference${waiting>1?'s':''} with Crossref\u2026` : '';
+  notesEl.innerHTML = notesHtml(state.analyses);
+}
+
+async function runCheck(){
+  const refs = splitRefs(input.value).slice(0,15);
+  if(!refs.length){
+    state = {analyses: [], pending: []};
+    render();
+    outBox.innerHTML = '<div class="placeholder">Paste at least one reference on the right.</div>';
+    return;
+  }
+  const wantLookup = document.getElementById('doiLookup').checked;
+  const analyses = refs.map(r => analyze(r));
+  const pending = analyses.map(a => (wantLookup && needsCrossref(a.fixed)) ? 1 : 0);
+  state = {analyses, pending};
+  render();                       // show the corrected list straight away; Crossref results fold in as they arrive
+  await Promise.all(analyses.map(async (a,i)=>{
+    if(!pending[i]) return;
+    applyCrossref(a, await lookupCrossref(a.fixed));
+    if(state.analyses !== analyses) return;   // a newer check replaced this one
+    state.pending[i] = 0;
+    render();
+  }));
+}
+
+// Copy: plain text and formatted (italics kept) so it pastes cleanly into Word / Google Docs.
+copyBtn.addEventListener('click', async ()=>{
+  const fixedList = state.analyses.map(a => a.fixed);
+  if(!fixedList.length) return;
+  const html = fixedList.map(f => `<p style="margin:0 0 12px 0;padding-left:0.5in;text-indent:-0.5in">${withItalics(f)}</p>`).join('');
+  const text = fixedList.map(f => f.replace(/\*/g,'')).join('\n\n');
+  let ok = false;
+  try{                                           // formatted copy through a temporary, off-screen element
+    const tmp = document.createElement('div');
+    tmp.style.cssText = 'position:fixed;left:-9999px;top:0;white-space:pre-wrap';
+    tmp.innerHTML = html;
+    document.body.appendChild(tmp);
+    const range = document.createRange(); range.selectNodeContents(tmp);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    ok = document.execCommand('copy');
+    sel.removeAllRanges(); tmp.remove();
+  }catch(e){ ok = false; }
+  if(!ok){
+    try{
+      if(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write){
+        await navigator.clipboard.write([new ClipboardItem({'text/html': new Blob([html],{type:'text/html'}), 'text/plain': new Blob([text],{type:'text/plain'})})]);
+        ok = true;
+      } else if(navigator.clipboard){ await navigator.clipboard.writeText(text); ok = true; }
+    }catch(e){ ok = false; }
+  }
+  copyBtn.textContent = ok ? 'Copied \u2713' : 'Copy failed \u2014 select the text instead';
+  setTimeout(()=>{ copyBtn.textContent = 'Copy all'; }, 2000);
+});
+
+function splitRefs(text){
+  return text.split(/\n\s*\n|\n(?=(?:[A-Z*][^\n]*)?\((?:\d{4}|n\.d\.))/)
+    .map(s=>s.trim())
+    .filter(Boolean);
+}
+
+function esc(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function withItalics(s){
+  return esc(s).replace(/\*(.+?)\*/g, '<em>$1</em>');
+}
+
+// Volume + optional issue, in any of the shapes people type them, so they can all be
+// rewritten to APA's "34(3)":  34(3) | 34 (3) | 34( 3 ) | 34, 3 | 34 3 | 34, no. 3 |
+// 34, Issue 3 | Volume 34, Issue 3.  A bare second number only counts as the issue when a
+// page/article number follows it after a comma ("34, 3, 100-110"), so "34, 100-110"
+// (volume + pages, no issue) is never misread.
+// Groups: 1 = volume, 2 = "(3)" issue, 3 = labelled issue, 4 = bare issue.
+const VOL_ISSUE_SRC = String.raw`(?:Vol(?:ume)?\.?\s*)?(\d+)(?:\s*\(\s*(\d+)\s*\)|\s*,?\s*(?:No|Number|Issue|Iss)\.?\s*(\d+)|(?:\s*,\s*|\s+)(\d+)(?=\s*,\s*(?:\d|Article|e\d)))?`;
+
+const MINOR_WORDS = new Set(['of','in','on','at','to','for','and','but','or','nor','a','an','the','as','by','from','with','into','over','per','via']);
+
+function titleCaseJournal(name){
+  return name.split(' ').map((w,i)=>{
+    let bare = w.replace(/[^A-Za-z]/g,'');
+    if(!bare) return w;
+    if(i>0 && MINOR_WORDS.has(bare.toLowerCase())) return w.toLowerCase();
+    // Capitalize the first letter of every major word (handles words that
+    // arrived all-lowercase, e.g. "management" -> "Management"), including
+    // each part of a hyphenated word (e.g. "cross-cultural" -> "Cross-Cultural").
+    return w.split('-').map(part=>{
+      if(!part) return part;
+      let firstAlphaIdx = part.search(/[A-Za-z]/);
+      if(firstAlphaIdx === -1) return part;
+      return part.slice(0,firstAlphaIdx) + part.charAt(firstAlphaIdx).toUpperCase() + part.slice(firstAlphaIdx+1);
+    }).join('-');
+  }).join(' ');
+}
+
+// Proper nouns that must keep their capital letter in sentence case. This can't be
+// exhaustive (a personal name or a niche brand can't be recognized from the text
+// alone) \u2014 the on-screen warning asks the user to double-check those.
+const PROPER_NOUNS = new Set((
+  'america american americans africa african asia asian europe european australia australian canada canadian ' +
+  'china chinese india indian japan japanese korea korean germany german france french italy italian spain spanish ' +
+  'britain british england english scotland scottish ireland irish russia russian brazil brazilian mexico mexican ' +
+  'israel israeli arab arabic pakistan pakistani bangladesh indonesia indonesian malaysia malaysian singapore ' +
+  'thailand thai vietnam vietnamese turkey turkish egypt egyptian nigeria nigerian kenya kenyan netherlands dutch ' +
+  'sweden swedish norway norwegian denmark danish finland finnish switzerland swiss poland polish greece greek ' +
+  'portugal portuguese iran iranian iraq iraqi saudi latin latino latina latinx hispanic european ' +
+  'january february march april june july august september october november december ' +
+  'monday tuesday wednesday thursday friday saturday sunday ' +
+  'christian christianity muslim islam islamic jewish judaism hindu hinduism buddhist buddhism catholic ' +
+  'amazon google facebook meta instagram twitter snapchat netflix apple microsoft uber lyft airbnb tesla starbucks ' +
+  'walmart nike samsung alexa siri spotify reddit wikipedia pinterest zoom twitch telegram wechat weibo alibaba ' +
+  'tencent baidu ikea disney toyota android windows linkedin youtube tiktok whatsapp paypal ebay openai chatgpt ' +
+  'iphone ipad'
+).split(/\s+/));
+// Brands whose official spelling isn't simply "Capitalized".
+const PROPER_CANON = {tiktok:'TikTok', youtube:'YouTube', linkedin:'LinkedIn', whatsapp:'WhatsApp', paypal:'PayPal',
+  ebay:'eBay', openai:'OpenAI', chatgpt:'ChatGPT', iphone:'iPhone', ipad:'iPad'};
+// Acronyms worth keeping when a whole title arrives in ALL CAPS (where "is this word an
+// acronym?" can't be told from the letters alone).
+const KNOWN_ACRONYMS = new Set('ai ceo cfo covid hiv aids usa uk us eu un nasa gdp api ict ux ui vr ar iot cx crm erp roi kpi seo ngo nlp gpt llm it hr'.split(' '));
+// Words that Title Case leaves lowercase mid-title, and which are therefore also the
+// clearest evidence of a stray capital when they show up capitalized in a sentence-case title.
+const TITLE_MINOR = new Set(['a','an','the','and','but','or','nor','for','so','yet','of','in','on','at','to','by','from','with','into','over','per','via','as','vs','versus','than','is','are','be']);
+const TITLE_BREAK_RE = /[:?!\u2014]["'\u201D\u2019)\]]*$/; // a token ending like this makes the NEXT word start a new clause
+
+function splitTitleWord(seg){
+  // -> [leading non-letters, word (letters/apostrophes), everything after]
+  let m = seg.match(/^([^A-Za-z]*)([A-Za-z][A-Za-z'\u2019]*)([\s\S]*)$/);
+  return m ? [m[1], m[2], m[3]] : null;
+}
+
+function sentenceCaseTitle(title){
+  const allCaps = /[A-Z]/.test(title) && !/[a-z]/.test(title);
+  const cap1 = w => w.charAt(0).toUpperCase() + w.slice(1);
+  function convertSeg(seg, cap){
+    let sp = splitTitleWord(seg);
+    if(!sp) return seg;
+    let [lead, w, tail] = sp;
+    let poss = (w.match(/['\u2019][sS]$/) || [''])[0];
+    let stem = poss ? w.slice(0, -poss.length) : w;
+    let low = stem.toLowerCase();
+    let out;
+    if(PROPER_NOUNS.has(low)){
+      out = (PROPER_CANON[low] || cap1(low)) + poss.toLowerCase();       // Amazon, YouTube, Tesla's
+    } else if(!allCaps && /^[A-Z]{2,}$/.test(stem)){
+      out = w;                                                            // acronym: AI, PLS, CEO
+    } else if(allCaps && KNOWN_ACRONYMS.has(low)){
+      out = stem.toUpperCase() + poss.toLowerCase();
+    } else if(!allCaps && (/[a-z][A-Z]/.test(stem))){
+      out = w;                                                            // mixed-case brand: iPhone, McDonald's
+    } else if(!allCaps && /^[BCDEFGHJKLMNOPQRSTUVWXYZ]$/.test(stem)){
+      out = w;                                                            // lone capital letter: Generation Z, Vitamin C
+    } else if(stem === 'I'){
+      out = w;
+    } else {
+      out = cap ? cap1(w.toLowerCase()) : w.toLowerCase();
+    }
+    if(cap && out.charAt(0) !== out.charAt(0).toUpperCase() && !/[a-z][A-Z]/.test(out)) out = cap1(out);
+    return lead + out + tail;
+  }
+  let capNext = true; // first word of the title is always capitalized
+  return title.split(/(\s+)/).map(tok=>{
+    if(/^\s+$/.test(tok) || tok === '') return tok;
+    // Break at hyphens (each part is judged alone, so "Customer-Chatbot" -> "customer-chatbot"
+    // and "Post-COVID" -> "post-COVID") and at em dashes (which also start a new clause).
+    let bits = tok.split(/(-|\u2014)/);
+    let capHere = capNext;
+    let out = bits.map(b=>{
+      if(b === '-') return b;
+      if(b === '\u2014'){ capHere = true; return b; }
+      let r = convertSeg(b, capHere);
+      capHere = false;
+      return r;
+    }).join('');
+    capNext = TITLE_BREAK_RE.test(tok);   // first word after a colon (or ?, !, em dash) is capitalized
+    return out;
+  }).join('');
+}
+
+// Does this title look like Title Case (as opposed to sentence case that merely has a
+// proper noun or two)? Judged on the words that sentence case would NOT capitalize anyway
+// \u2014 not the first word, not the word after a colon, not acronyms/brands/proper nouns \u2014
+// so "Consumer reactions to Tesla" (proper noun) is left alone but
+// "Blame the Bot: Anthropomorphism and Anger in Customer-Chatbot Interactions" is converted.
+function looksTitleCased(title){
+  if(/[A-Z]/.test(title) && !/[a-z]/.test(title)) return true; // ALL CAPS title
+  let capNext = true, cands = 0, caps = 0, capMinor = 0;
+  for(const tok of title.trim().split(/\s+/)){
+    let sp = splitTitleWord(tok);
+    if(sp && !capNext){
+      let w = sp[1], poss = (w.match(/['\u2019][sS]$/)||[''])[0];
+      let stem = poss ? w.slice(0,-poss.length) : w;
+      let low = stem.toLowerCase();
+      if(TITLE_MINOR.has(low)){
+        if(/^[A-Z]/.test(stem) && stem.length > 1) capMinor++;
+      } else if(!PROPER_NOUNS.has(low) && !/^[A-Z]{2,}$/.test(stem) && !/[a-z][A-Z]/.test(stem) && stem.length > 1){
+        cands++;
+        if(/^[A-Z]/.test(stem)) caps++;
+      }
+    }
+    capNext = TITLE_BREAK_RE.test(tok);
+  }
+  return (cands >= 2 && caps / cands >= 0.6) || (capMinor >= 1 && caps >= 1);
+}
+
+// For a title that's otherwise sentence case: fix the small slips only \u2014 a lowercase word
+// right after a colon, a lowercase first word, and a stray capital on a small function
+// word ("...And...", "...Of the..."). Never lowercases a content word (it might be a proper noun).
+function fixTitleSlips(title){
+  let capNext = true;
+  return title.split(/(\s+)/).map(tok=>{
+    if(/^\s+$/.test(tok) || tok === '') return tok;
+    let sp = splitTitleWord(tok), out = tok;
+    if(sp){
+      let [lead, w, tail] = sp;
+      if(capNext && /^[a-z]/.test(w) && !/[A-Z]/.test(w)) out = lead + w.charAt(0).toUpperCase() + w.slice(1) + tail;
+      else if(!capNext && w.length > 1 && TITLE_MINOR.has(w.toLowerCase()) && /^[A-Z][a-z]+$/.test(w)) out = lead + w.toLowerCase() + tail;
+    }
+    capNext = TITLE_BREAK_RE.test(tok);
+    return out;
+  }).join('');
+}
+
+// ---------- Book reference helpers ----------
+// Abbreviations whose period does NOT end a sentence when we look for where a title/publisher stops.
+const BOOK_ABBR = new Set(['st','mr','mrs','ms','dr','prof','vs','jr','sr','inc','co','ltd','vol','vols','fig','univ']);
+
+// Index of the first sentence-ending "." (or "?" / "!" when allowQ) that sits OUTSIDE any (...) or [...],
+// isn't the period of a common abbreviation, and is followed by whitespace (or the end, when atEnd).
+function findEnd(s, allowQ, atEnd){
+  let depth = 0;
+  for(let i=0;i<s.length;i++){
+    const c = s[i];
+    if(c==='('||c==='[') depth++;
+    else if(c===')'||c===']') depth = Math.max(0, depth-1);
+    else if(depth===0 && (c==='.' || (allowQ && (c==='?'||c==='!')))){
+      const last = i === s.length-1;
+      if(!(last ? atEnd : /\s/.test(s[i+1]))) continue;
+      if(c==='.' && !last){
+        const w = ((s.slice(0,i).match(/([A-Za-z]+)$/))||[])[1] || '';
+        if(BOOK_ABBR.has(w.toLowerCase())) continue;
+      }
+      return i;
+    }
+  }
+  return -1;
+}
+// Split on top-level sentence periods (same rules as findEnd), dropping the periods.
+function splitTop(s){
+  const out = []; let rest = s;
+  for(;;){
+    const i = findEnd(rest, false, true);
+    if(i === -1){ if(rest.trim()) out.push(rest.trim()); break; }
+    const seg = rest.slice(0, i).trim(); if(seg) out.push(seg);
+    rest = rest.slice(i+1);
+  }
+  return out;
+}
+
+const ORD_WORDS = {first:1,second:2,third:3,fourth:4,fifth:5,sixth:6,seventh:7,eighth:8,ninth:9,tenth:10};
+const ordinal = n => { const v = n % 100; if(v>=11 && v<=13) return n+'th'; return n + ({1:'st',2:'nd',3:'rd'}[n%10] || 'th'); };
+const ED_START_RE = /^((?:\d+\s*(?:st|nd|rd|th)?\.?|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|revised|rev\.?)\s*ed(?:ition)?\b\.?|vols?\.?\s*\d+(?:\s*[-\u2013\u2014]\s*\d+)?)\s*[.,]?(?:\s+|$)/i;
+const ED_END_RE = /[,\s]\s*((?:\d+\s*(?:st|nd|rd|th)?\.?|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|revised|rev\.?)\s*ed(?:ition)?\b\.?|vols?\.?\s*\d+(?:\s*[-\u2013\u2014]\s*\d+)?)$/i;
+
+// "2nd edition, volume 3" / "Vol 3" / "revised ed" / "second ed." -> "2nd ed., Vol. 3" (null if it holds anything else).
+function parseEdVol(s){
+  let t = ' ' + s + ' ', ed = null, vol = null, m;
+  if((m = t.match(/(\d+)\s*(?:st|nd|rd|th)?\.?\s*ed(?:ition)?\b\.?/i))){ ed = ordinal(parseInt(m[1],10)) + ' ed.'; t = t.replace(m[0],' '); }
+  else if((m = t.match(/\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\s+ed(?:ition)?\b\.?/i))){ ed = ordinal(ORD_WORDS[m[1].toLowerCase()]) + ' ed.'; t = t.replace(m[0],' '); }
+  else if((m = t.match(/\b(?:revised|rev)\b\.?\s*(?:ed(?:ition)?\b\.?)?/i))){ ed = 'Rev. ed.'; t = t.replace(m[0],' '); }
+  if((m = t.match(/\bvol(?:ume)?s?\b\.?\s*(\d+)(?:\s*[-\u2013\u2014]\s*(\d+))?/i))){ vol = (m[2] ? 'Vols. ' + m[1] + '\u2013' + m[2] : 'Vol. ' + m[1]); t = t.replace(m[0],' '); }
+  if(/[A-Za-z0-9]/.test(t) || (!ed && !vol)) return null;
+  return [ed, vol].filter(Boolean).join(', ');
+}
+
+const EBOOK_BRACKET = /\s*\[[^\]]*(?:kindle|nook|kobo|e-?book|e-?reader|epub|digital editions|ibooks|apple books|google play|vitalsource)[^\]]*\]/gi;
+const EBOOK_NOISE = /\b(?:(?:retrieved\s+from|available\s+(?:from|at)|accessed\s+(?:via|through|from)|via)\s+)?(?:amazon(?:\.com)?(?!\s+publishing)|kindle(?:\s+(?:edition|version|store|e-?book))?|nook(?:\s+(?:edition|version|book))?|kobo(?:\s+(?:edition|version))?|google\s+play\s+books|google\s+books|apple\s+books|ibooks|vitalsource(?:\s+bookshelf)?|(?:proquest\s+)?ebook\s+central|ebscohost(?:\s+ebook\s+collection)?|ebsco\s+ebooks|ebrary|overdrive|scribd|perlego|adobe\s+digital\s+editions|e-?books?(?:\s+(?:edition|version|collection|format))?|epub(?:\s+(?:edition|version))?)(?![A-Za-z])\.?/gi;
+const EBOOK_HOST = /amazon\.|kindle|books\.google|play\.google\.com\/store\/books|ebookcentral|ebscohost|ebsco\.com|kobo\.com|barnesandnoble|overdrive|vitalsource|scribd\.com|perlego|ezproxy|libproxy/i;
+
+// Publisher name only: drop "Inc.", "Co.", "Ltd.", "LLC" and "Publishers" (keep "Press" and "Books").
+function cleanPublisher(p){
+  const removed = [];
+  p = p.trim().replace(/\.+$/, '');
+  for(let k=0;k<4;k++){
+    let m = p.match(/[,\s]+(Inc|Co|Ltd|LLC)\.?$/i);
+    if(m){ removed.push(m[1].replace(/^./, c=>c.toUpperCase()) + (/llc/i.test(m[1]) ? '' : '.')); p = p.slice(0, m.index); continue; }
+    m = p.match(/[,\s]+Publishers?$/i);
+    if(m){ removed.push('Publishers'); p = p.slice(0, m.index); continue; }
+    break;
+  }
+  return {p: p.replace(/[,&\s]+$/, ''), removed};
+}
+
+// Book-style ("standalone work") reference: Author. (Year). *Title* (2nd ed., Vol. 3). Publisher. https://doi.org/...
+// Returns the corrected string and pushes messages onto `issues`.
+function bookRules(fixed, issues, hadAsterisks){
+  const ym = fixed.match(/\((\d{4}[a-z]?|n\.d\.)(,\s*[^)]*)?\)\.?\s*/);
+  if(!ym) return fixed;
+  const prefix = fixed.slice(0, ym.index);
+  const after = fixed.slice(ym.index + ym[0].length);
+  if(!after.trim()) return fixed;
+  const yearTxt = ym[1], hasMonth = !!ym[2];
+  const pre = prefix.trim();
+  const titleInPrefix = /\*/.test(pre);       // "*Title*. (2020). Publisher." -- already written as a no-author entry
+  const moveTitle = !pre;                     // "(2020). Title. Publisher." -- author missing
+  const personGroups = /[A-Za-z'\u2019\-]+,\s*[A-Z]\./;
+  const authorLooksPerson = personGroups.test(pre);
+  const groupRe = /[A-Z][A-Za-z'\u2019\-]+,\s*(?:[A-Z]\.\s*)+/g;
+
+  // ---- Editor as author: Lee, K. (Ed.). (2020).  /  Lee, K., & Kim, J. (Eds.). (2020). ----
+  let newPre = pre ? pre + ' ' : '';
+  {
+    const em = pre.match(/^(.*?[A-Za-z]\.?)[\s,]*\(?\b(eds?|editors?)\b\.?\)?\.?$/i);
+    if(em && personGroups.test(em[1])){
+      let authorsPart = em[1].trim().replace(/,$/, '');
+      const groups = (authorsPart.match(groupRe) || []).map(g=>g.trim());
+      if(groups.length && groups.join(', ') === authorsPart.replace(/\s+/g,' ') && groups.length > 1 && !/&|\band\b/i.test(authorsPart)){
+        const last = groups.pop();
+        authorsPart = groups.join(', ') + ', & ' + last;
+        issues.push({sev:'err', text:'Missing "&" before the final editor \u2014 APA requires "&" (with a comma before it) before the last name in the list.'});
+      }
+      const n = (authorsPart.match(groupRe) || []).length;
+      const label = n > 1 ? 'Eds.' : 'Ed.';
+      newPre = authorsPart + ' (' + label + '). ';
+      if(newPre.trim() !== pre){
+        issues.push({sev:'warn', text:'Editor as author: put "(Ed.)" for one editor or "(Eds.)" for several right after the name(s), then a period, then the year \u2014 e.g. Lee, K. (Ed.). (2020).'});
+      }
+    }
+  }
+  // Organization author: acronym instead of the full name
+  if(/^[A-Z]{2,8}\.?$/.test(pre)){
+    issues.push({sev:'warn', text:'For an organization as author, write the full name (e.g. "World Health Organization", not "WHO") \u2014 don\u2019t abbreviate it.'});
+  }
+
+  // ---- Work on the part after the year ----
+  let a = after.replace(/\*/g, '').replace(/\s+/g, ' ').trim();
+  let stripped = false;
+  a = a.replace(EBOOK_BRACKET, () => { stripped = true; return ''; });
+  let retr = false;
+  a = a.replace(/\bRetrieved\s+(?:[A-Za-z]+\.?\s+\d{1,2},\s*\d{4},?\s*)?from\s*:?\s*/i, () => { retr = true; return ''; })
+       .replace(/\bAvailable\s+(?:from|at)\s*:?\s*/i, () => { retr = true; return ''; });
+  if(retr) issues.push({sev:'warn', text:'Removed "Retrieved from" \u2014 book references give just the DOI or URL, with no lead-in words or retrieval date.'});
+
+  // DOI / URL: keep one (DOI preferred), drop e-reader/database links, no period after it.
+  let url = '';
+  const urls = a.match(/https?:\/\/\S+/g) || [];
+  if(urls.length){
+    a = a.replace(/https?:\/\/\S+/g, ' ').replace(/\s+/g, ' ').trim();
+    const clean = urls.map(u => u.replace(/[.,;:)]+$/, ''));
+    const keep = clean.filter(u => !EBOOK_HOST.test(u));
+    if(keep.length < clean.length){ stripped = true; }
+    url = keep.find(u => /doi\.org\//i.test(u)) || keep[0] || '';
+  }
+
+  // Title zone / rest
+  let T = '', R = a;
+  if(!titleInPrefix){
+    const end = findEnd(a, true, true);
+    if(end === -1){ T = a; R = ''; }
+    else { T = a.slice(0, /[?!]/.test(a[end]) ? end + 1 : end); R = a.slice(end + 1).trim(); }
+    T = T.trim();
+    if(!T) return fixed;
+  }
+
+  // Edition / volume: (2nd ed.), (Rev. ed.), (Vol. 3), (2nd ed., Vol. 3) -- after the title, in parentheses, not italic.
+  let edParts = [], edChanged = false;
+  if(!titleInPrefix){
+    let tm = T.match(/\s*\(([^)]*)\)\s*$/);
+    if(tm){
+      const p = parseEdVol(tm[1]);
+      if(p){ edParts.push(p); if(p !== tm[1].trim()) edChanged = true; T = T.slice(0, tm.index); }
+      else { edParts.push(tm[1].trim()); T = T.slice(0, tm.index); }   // some other note, e.g. (Report No. 5): keep it, but outside the italics
+    }
+    // bare tail such as "..., 2nd ed., Vol. 3" (no parentheses): peel it off one piece at a time, keeping edition before volume
+    for(let k=0;k<2 && !tm;k++){
+      const bm = T.match(ED_END_RE);
+      const p = bm && parseEdVol(bm[1]);
+      if(!p) break;
+      edParts.unshift(p); edChanged = true; T = T.slice(0, bm.index);
+    }
+    for(let k=0;k<2;k++){
+      let m = R.match(/^\(([^)]*)\)\.?\s*/);
+      if(m){ const p = parseEdVol(m[1]); if(p){ edParts.push(p); if(p !== m[1].trim()) edChanged = true; R = R.slice(m[0].length); continue; } }
+      m = R.match(ED_START_RE);
+      if(m){ const p = parseEdVol(m[1]); if(p){ edParts.push(p); edChanged = true; R = R.slice(m[0].length); continue; } }
+      break;
+    }
+    T = T.replace(/[\s,:;]+$/, '');
+  }
+  const edvolText = edParts.length ? '(' + edParts.join(', ') + ')' : '';
+
+  // Publisher
+  const before = R;
+  R = R.replace(EBOOK_NOISE, () => { stripped = true; return ''; }).replace(/\s{2,}/g, ' ').replace(/^[\s.,;:]+/, '').trim();
+  let segs = splitTop(R);
+  let publisher = segs.shift() || '';
+  let extras = segs;
+  let rawPublisher = publisher;
+  if(publisher){
+    const lm = publisher.match(/^([A-Z][A-Za-z.'\u2019 \-]{1,30}?(?:,\s*[A-Za-z. ]{2,30})?):\s+(\S.*)$/);
+    if(lm && lm[1].split(/\s+/).length <= 4){
+      publisher = lm[2];
+      issues.push({sev:'err', text:'APA 7 dropped the publisher\u2019s city/state \u2014 list only the publisher name (e.g. "Wiley." not "New York, NY: Wiley.").'});
+    }
+    const cp = cleanPublisher(publisher);
+    publisher = cp.p;
+    if(cp.removed.length){
+      issues.push({sev:'warn', text:'Dropped ' + cp.removed.map(x=>'"'+x+'"').join(' and ') + ' from the publisher name \u2014 APA 7 leaves those out (but keeps "Press" and "Books").'});
+    }
+  }
+  if(stripped){
+    issues.push({sev:'warn', text:'Removed the e-reader, database or e-book format (e.g. Kindle, Amazon, ProQuest Ebook Central) \u2014 APA 7 doesn\u2019t mention it; give the publisher and the DOI/URL if there is one.'});
+  }
+  // Author and publisher are the same organization -> leave the publisher out
+  const nz = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  if(publisher && pre && !authorLooksPerson && !titleInPrefix){
+    const authorOrg = pre.replace(/\(Eds?\.\)\.?/i, '').trim().replace(/\.$/, '');
+    if(authorOrg && nz(authorOrg) === nz(publisher)){
+      publisher = '';
+      issues.push({sev:'warn', text:'The author and the publisher are the same organization, so the publisher is left out (APA 7).'});
+    }
+  }
+  if(!publisher && !extras.length && authorLooksPerson){
+    issues.push({sev: url ? 'note' : 'warn', text: url
+      ? 'No publisher name found. If this is a book, add the publisher (name only) before the DOI/URL.'
+      : 'No publisher name found \u2014 a book reference needs the publisher (name only, no city), then the DOI/URL if there is one.'});
+  }
+
+  // Month in the date: books use the year only
+  const bookish = !!edvolText || /\b(press|books?|university|publishers?|publishing|publications|academic|verlag|wiley|sage|springer|routledge|elsevier|pearson|mcgraw|macmillan|penguin|harpercollins|norton|guilford|palgrave|cengage|houghton|bloomsbury|emerald|jossey)\b/i.test(rawPublisher) || /doi\.org\//i.test(url);
+  let yearParen = '(' + yearTxt + ').';
+  if(hasMonth){
+    if(bookish){ issues.push({sev:'warn', text:'Removed the month/day from the date \u2014 a book reference gives only the year, e.g. (2020).'}); }
+    else { yearParen = ym[0].trim().replace(/\.$/, '') + '.';
+      issues.push({sev:'note', text:'If this is a book, the date should be the year only \u2014 the month/day was left because this could be a webpage or news item.'}); }
+  }
+
+  // Rebuild
+  let titlePart = '';
+  if(!titleInPrefix){
+    titlePart = '*' + T + '*' + (edvolText ? ' ' + edvolText + '.' : (/[?!]$/.test(T) ? '' : '.'));
+  }
+  let out;
+  if(moveTitle) out = titlePart + ' ' + yearParen;
+  else if(titleInPrefix) out = (/[.?!]\*?$/.test(pre) ? pre : pre + '.') + ' ' + yearParen;
+  else out = newPre + yearParen + ' ' + titlePart;
+  if(publisher) out += ' ' + publisher + '.';
+  extras.forEach(seg => { out += ' ' + seg + (/[.?!]$/.test(seg) ? '' : '.'); });
+  if(url) out += ' ' + url;
+
+  if(edChanged) issues.push({sev:'warn', text:'Edition/volume goes in parentheses right after the title, not italic, in APA form \u2014 e.g. (2nd ed.), (Rev. ed.), (Vol. 3) or (2nd ed., Vol. 3) \u2014 with the period after the parenthesis.'});
+  if(moveTitle) issues.push({sev:'warn', text:'No author: moved the title (italic) to the author position, before the year. In the reference list, alphabetize this entry by the first significant word of the title \u2014 ignore "A", "An" and "The".'});
+  else if(titleInPrefix) issues.push({sev:'note', text:'No author: the title is in the author position. In the reference list, alphabetize this entry by the first significant word of the title \u2014 ignore "A", "An" and "The".'});
+  else if(/^anonymous\.?$/i.test(pre)) issues.push({sev:'note', text:'Use "Anonymous" as the author only if the work is actually signed that way. Otherwise leave the author out and start with the title (italic), then the year.'});
+  if(!hadAsterisks && !titleInPrefix) issues.push({sev:'note', text:'Italicized the standalone title (books, reports, and webpages get an italicized title in APA 7; journal article titles do not \u2014 only the journal name is italicized).'});
+  return out;
+}
+
+function analyze(raw){
+  let issues = []; // {sev, text}
+  let fixed = raw.trim().replace(/\s+/g,' ');
+  const hadAsterisks = /\*/.test(raw);
+
+  // 1. quotes normalize
+  if(/[\u2018\u2019\u201C\u201D]/.test(fixed)){
+    fixed = fixed.replace(/[\u2018\u2019]/g,"'").replace(/[\u201C\u201D]/g,'"');
+    issues.push({sev:'note', text:'Curly quotes normalized to straight quotes.'});
+  }
+
+  // 1b. Editor abbreviation casing/punctuation: "(ed)", "(Ed)", "(EDS)", "(eds.)"
+  //     etc. -> "(Ed.)" for one editor, "(Eds.)" for more than one. Needed so the
+  //     book-chapter/proceedings detection further down (rule 12) — which requires
+  //     the properly punctuated form — can recognize the editor clause at all.
+  if(/\(Eds?\.?\)/i.test(fixed) && !/\(Eds?\.\)/.test(fixed)){
+    fixed = fixed.replace(/\((Eds?)\.?\)/i, (m, grp) => `(${grp.toLowerCase()==='eds' ? 'Eds' : 'Ed'}.)`);
+    issues.push({sev:'warn', text:'Normalized the editor abbreviation to APA style: "(Ed.)" for one editor, "(Eds.)" for more than one.'});
+  }
+
+  // 2. spacing after initials, e.g. "J.Smith" -> "J. Smith"
+  if(/[A-Z]\.[A-Z][a-z]/.test(fixed)){
+    fixed = fixed.replace(/([A-Z])\.([A-Z][a-z])/g,'$1. $2');
+    issues.push({sev:'warn', text:'Missing space after an author initial — added.'});
+  }
+
+  // 2b. Date-in-parentheses slips that would otherwise stop the year being found at all:
+  //     "(March 2020)" -> "(2020, March)" and "(nd)" / "(no date)" -> "(n.d.)".
+  {
+    const MO = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
+    let b2 = fixed;
+    fixed = fixed.replace(new RegExp('\\(\\s*(' + MO + ')\\.?\\s+(?:(\\d{1,2}),?\\s+)?(\\d{4}[a-z]?)\\s*\\)', 'i'), (m, mo, d, y) => '(' + y + ', ' + mo + (d ? ' ' + d : '') + ')');
+    if(fixed !== b2) issues.push({sev:'warn', text:'The year goes first inside the parentheses, e.g. "(2020, March 5)" \u2014 not the month first.'});
+    b2 = fixed;
+    fixed = fixed.replace(/\((?:n\.?\s?d\.?|no\s+date|undated)\)/gi, '(n.d.)');
+    if(fixed !== b2) issues.push({sev:'warn', text:'Use "(n.d.)" \u2014 the APA form \u2014 when a reference has no date.'});
+  }
+
+  // 3. Year in parentheses (a conference presentation may add ", Month Day" inside
+  //    the same parentheses, e.g. "(2023, March 14–16)" — still counts as the year).
+  let yearMatch = fixed.match(/\((\d{4}[a-z]?)(?:,\s*[^)]*)?\)/) || fixed.match(/\(n\.d\.\)/);
+  if(!yearMatch){
+    let bareYear = fixed.match(/(?:^|\s)(\d{4})(?:[.,]|\s)/);
+    if(bareYear){
+      fixed = fixed.replace(bareYear[1], `(${bareYear[1]})`);
+      issues.push({sev:'err', text:'Publication year must be enclosed in parentheses, e.g. (2020).'});
+      yearMatch = fixed.match(/\((\d{4}[a-z]?|n\.d\.)\)/);
+    } else {
+      issues.push({sev:'err', text:'No publication year found. APA 7 references need a year (or n.d.) in parentheses right after the author list.'});
+    }
+  }
+  if(yearMatch){
+    let afterYearIdx = fixed.indexOf(yearMatch[0]) + yearMatch[0].length;
+    let restAfter = fixed.slice(afterYearIdx);
+    let badPunct = restAfter.match(/^\s*([,;:])/);
+    if(badPunct){
+      fixed = fixed.slice(0,afterYearIdx) + '. ' + restAfter.replace(/^\s*[,;:]\s*/, '');
+      issues.push({sev:'warn', text:'Replaced the punctuation after the year with the period APA requires.'});
+    } else if(fixed[afterYearIdx] !== '.'){
+      fixed = fixed.slice(0,afterYearIdx) + '.' + restAfter.replace(/^\s*/, ' ');
+      issues.push({sev:'warn', text:'Added the period that must follow the year in parentheses.'});
+    }
+  }
+
+  // 3b. Ensure a space follows the period after the year parentheses even when
+  //     that period was already present in the original text (the block above only
+  //     adds the space as a side effect of adding the period itself).
+  {
+    let ym2 = fixed.match(/\((?:\d{4}[a-z]?(?:,\s*[^)]*)?|n\.d\.)\)\./);
+    if(ym2){
+      let idx2 = fixed.indexOf(ym2[0]) + ym2[0].length;
+      if(fixed[idx2] && !/\s/.test(fixed[idx2])){
+        fixed = fixed.slice(0, idx2) + ' ' + fixed.slice(idx2);
+        issues.push({sev:'note', text:'Added the missing space after the period that follows the year.'});
+      }
+    }
+  }
+
+  // 4. "and" vs "&" before final author, WITH the comma APA always requires before
+  //    the ampersand in a reference-list entry (true even for exactly two authors).
+  //    Scoped to the author segment (before the year) so it never touches a title.
+  //    Requires a real year match: without one there's no reliable anchor for where
+  //    the author list ends, and guessing risks rewriting the title instead (a "no
+  //    year found" error is already reported above, so this isn't a silent skip).
+  const titleFirst = !!yearMatch && /\*/.test(fixed.slice(0, fixed.indexOf(yearMatch[0])));   // no-author entry: "*Title*. (2020)."
+  if(yearMatch && !titleFirst){
+    let yIdx = fixed.indexOf(yearMatch[0]);
+    let authorSegment = fixed.slice(0, yIdx);
+    let restOfString = fixed.slice(yIdx);
+    // 4-pre. Capitalize author names: surnames get a capital first letter and
+    //    initials are uppercase ("smith, j., jones, k." -> "Smith, J., Jones, K.";
+    //    "SMITH, J." -> "Smith, J."). Only runs when the segment clearly contains at
+    //    least one "surname, initial." pair, so a no-author reference that starts
+    //    with a title is never rewritten as if it were a list of names. Words after
+    //    the first letter are left as typed (McDonald, O'Brien), and "and"/"et al."
+    //    are skipped. Runs before the "&" logic so every later regex sees clean caps.
+    if(/[A-Za-z][A-Za-z'\u2019\-]+,\s*[A-Za-z]\.(?:\s*[A-Za-z]\.)*/.test(authorSegment)){
+      const capWord = w => w.replace(/(^|-)([a-z])/g, (m, p, c) => p + c.toUpperCase())
+                            .replace(/^([A-Za-z]['\u2019])([a-z])/, (m, p, c) => p + c.toUpperCase()); // O'brien -> O'Brien
+      let capped = authorSegment.replace(/[A-Za-z][A-Za-z'\u2019\-\.]*/g, (w, offset, whole) => {
+        let core = w.replace(/\.+$/, '');
+        if(/^(and|et|al)$/i.test(core)) return w;
+        // Initials, with or without periods ("j.", "j.a.", "J") -> uppercase.
+        if(/^[A-Za-z](\.[A-Za-z])*$/.test(core) && (core.length === 1 || w.includes('.'))) return w.toUpperCase();
+        // ALL-CAPS name -> Title case: a surname (any length) sitting right before
+        // ", X." (a comma and an initial with a period), or any all-caps word of 4+
+        // letters. Other short all-caps runs (JA) are ambiguous with bare initials,
+        // which step 4a below expands, so they're left alone.
+        let isSurnameSlot = /^,\s*[A-Za-z]\./.test(whole.slice(offset + w.length));
+        if(core === core.toUpperCase() && /[A-Z]{2,}/.test(core) && (core.length >= 4 || isSurnameSlot)){
+          return capWord(core.charAt(0) + core.slice(1).toLowerCase()) + w.slice(core.length);
+        }
+        return capWord(w);
+      });
+      if(capped !== authorSegment){
+        fixed = capped + restOfString;
+        authorSegment = capped;
+        issues.push({sev:'warn', text:'Capitalized the author names \u2014 APA requires "Last name, F. M." with a capital first letter on each surname and uppercase initials.'});
+      }
+    }
+
+    let newSegment = authorSegment;
+    if(/\band\b/i.test(authorSegment)){
+      // Split on every "and"/"AND"/"And" (there may be more than one, e.g. three
+      // authors written as "Smith and Jones and Lee"): everything but the last
+      // becomes a plain comma-separated author, and only the LAST "and" becomes
+      // the required ", & " before the final author.
+      let parts = authorSegment.split(/\s*,?\s*\band\b\s*/i).map(p=>p.trim()).filter(Boolean);
+      if(parts.length > 1){
+        let last = parts.pop();
+        newSegment = parts.join(', ') + ', & ' + last;
+        issues.push({sev:'err', text:'Use "&" (not "and") before the last author\u2019s name in a reference-list entry, with a comma before it \u2014 any earlier "and" between other authors becomes a plain comma.'});
+      }
+    } else if(/&/.test(authorSegment)){
+      // Catches every spacing variant around "&" \u2014 no space on either side
+      // ("J.&Jones"), a space on only one side ("J. &Jones" / "J.& Jones"), or the
+      // classic missing-comma case ("J. & Jones") \u2014 and normalizes all of them
+      // to APA's "Last name, F., & Last name, F." with a comma and single spaces.
+      let ampMatch = authorSegment.match(/([^\s,])\s*&\s*/);
+      if(ampMatch){
+        newSegment = authorSegment.replace(/([^\s,])\s*&\s*/, '$1, & ');
+        issues.push({sev:'warn', text:'Fixed the spacing/comma around "&" before the last author \u2014 APA requires a comma before it and a single space on each side, e.g. "Smith, J., & Jones, K."'});
+      }
+    } else {
+      // Neither "and" nor "&" appears anywhere in the author segment. If it's
+      // otherwise a clean comma-separated run of 2+ "Surname, Initials." authors
+      // (e.g. "Smith, J., Jones, K."), APA still requires "&" before the final
+      // author. Only fires when the WHOLE segment is nothing but these groups
+      // joined by ", " \u2014 so a segment that doesn't cleanly parse this way
+      // (unusual punctuation, a suffix like "Jr.", etc.) is left for 4a\u20134c below
+      // rather than risking a bad rewrite here.
+      let trimmedSeg = authorSegment.trim();
+      let groupRe = /[A-Z][a-zA-Z'\u2019\-]+,\s*[A-Z]\.(?:\s*[A-Z]\.)*/g;
+      let groups = trimmedSeg.match(groupRe);
+      if(groups && groups.length > 1 && groups.join(', ') === trimmedSeg){
+        let last = groups.pop();
+        newSegment = groups.join(', ') + ', & ' + last;
+        issues.push({sev:'err', text:'Missing "&" before the final author \u2014 APA requires "&" (with a comma before it) before the last author in a reference-list entry, even when every author is separated only by commas.'});
+      }
+    }
+
+    // Keep whatever whitespace separates the author list from "(" aside, so every
+    // sub-fix below can work on a trimmed "core" string and the spacing gets
+    // reattached safely at the end rather than risking a lost/doubled space.
+    let trailingWs = (newSegment.match(/(\s*)$/) || ['',' '])[1];
+    if(!trailingWs) trailingWs = ' ';
+    let core = newSegment.replace(/\s*$/, '');
+    const toInitials = words => words.map(w=>{
+      let letter = w.replace(/[^A-Za-z]/g,'').charAt(0);
+      return letter ? letter.toUpperCase()+'.' : '';
+    }).filter(Boolean).join(' ');
+
+    // 4a. A surname followed by concatenated/spaced bare initials with no periods,
+    // e.g. "Smith JA" or "Smith J A" -> "Smith, J. A.". Runs FIRST so the checks
+    // below never mistake a run of bare initials for a spelled-out given name.
+    {
+      let before = core;
+      core = core.replace(/\b([A-Z][a-zA-Z'\u2019\-]+)\s+([A-Z]{2,3})(?=[\s,&.]|$)/g,
+        (m, surname, inits) => `${surname}, ${inits.split('').join('. ')}.`);
+      if(core !== before){
+        issues.push({sev:'warn', text:'Expanded concatenated initials with the missing comma and periods, e.g. "Smith JA" \u2192 "Smith, J. A.".'});
+      }
+    }
+
+    // 4b. Auto-correct a name given as "Firstname Lastname" (or "Firstname M.
+    // Lastname") with no comma, into "Lastname, Initials." — the last word of each
+    // name is treated as the surname. A capitalized word only counts as a name word
+    // here if its 2nd letter is lowercase (or it's a lone period'd initial like "A."),
+    // so an all-caps run like "JA" — already handled by 4a above — is never re-read
+    // as a name. Handles both a single author and several authors joined by "&".
+    const nameWordRe = "(?:[A-Z][a-z][a-zA-Z'\u2019-]*\\.?|[A-Z]\\.)";
+    const nameRunRe = new RegExp(`^${nameWordRe}(\\s+${nameWordRe}){1,3}$`);
+    let finalSegment = core.replace(/\.$/, '');
+    if(/&/.test(finalSegment)){
+      // Split on "&" and strip any stray comma the "&"-join left on either side,
+      // then check each individual chunk on its own — this still catches a fully
+      // reversed multi-author list even though the string AS A WHOLE now contains
+      // a comma (from ", & ") that would otherwise mask the problem.
+      let cleanParts = finalSegment.split(/\s*&\s*/).map(p=>p.replace(/^,\s*/,'').replace(/,\s*$/,'').trim());
+      if(cleanParts.length > 1 && cleanParts.every(p=>!/,/.test(p) && nameRunRe.test(p))){
+        let rebuilt = cleanParts.map(p=>{
+          let words = p.split(/\s+/);
+          let surname = words[words.length-1];
+          return `${surname}, ${toInitials(words.slice(0,-1))}`;
+        });
+        let last = rebuilt.pop();
+        core = rebuilt.join(', ') + ', & ' + last;
+        issues.push({sev:'warn', text:'Author names were all in "Firstname Lastname" order \u2014 rewritten in APA\u2019s "Last name, Initials." order for each author. This assumes the last word of each name is the surname \u2014 double-check any multi-word surnames.'});
+      }
+    } else if(!/,/.test(finalSegment) && nameRunRe.test(finalSegment) && !/\b(?:Association|Organi[sz]ation|Institute|University|College|School|Department|Society|Council|Centers?|Centre|Agency|Bureau|Commission|Foundation|Committee|Ministry|Board|Office|Federation|Union|Company|Corporation|Group|Academy|Administration|Authority|Government|Network|Trust|Fund|Bank|Laboratory|Services?|Press|Publications?|Books)\b/.test(finalSegment)){
+      let words = finalSegment.split(/\s+/);
+      let surname = words[words.length-1];
+      let initials = toInitials(words.slice(0,-1));
+      core = `${surname}, ${initials}`;
+      issues.push({sev:'warn', text:`Author name was in "Firstname Lastname" order \u2014 rewritten as "${surname}, ${initials}" (APA reference lists use "Last name, Initials."). This assumes the last word is the surname \u2014 double-check if the name has a multi-word surname (e.g. "Van Der Berg") or a reversed convention.`});
+    }
+
+    // 4c. Normalize remaining name-formatting slips that don't depend on word order:
+    //  - a full given name spelled out after the surname comma, e.g.
+    //    "Smith, John" -> "Smith, J." Only fires when NOT followed by another
+    //    comma (a comma right after the word means it's really the NEXT author's
+    //    surname with its own initials, e.g. the "Jones" in "..., A., Jones, K." —
+    //    that must be left alone, not read as a spelled-out given name).
+    //  - a missing comma between a surname and already-period'd initials, e.g.
+    //    "Smith J." -> "Smith, J."
+    //  - a lone initial missing its period, e.g. "Smith, J" -> "Smith, J."
+    //  - missing spacing between two already-period'd initials, e.g. "J.A." -> "J. A."
+    {
+      let before = core;
+      core = core.replace(/\s+,/g, ',');           // "Smith , J." -> "Smith, J."
+      core = core.replace(/,(?=[A-Za-z])/g, ', ');  // "Smith,J." -> "Smith, J."
+      // A capitalized word after a comma is a spelled-out GIVEN name ("Smith, John" ->
+      // "Smith, J.") only when the token before that comma is a surname. If the token
+      // before the comma is an initial ("Adam, M., Wessel M." -- the "M." closes the
+      // previous author), the word is the NEXT author's surname with a missing comma,
+      // so it must be left alone here; the missing-comma fix just below then turns
+      // "Wessel M." into "Wessel, M." instead of destroying the surname.
+      core = core.replace(/(,\s*)([A-Z][a-z]{2,})(?=[\s.&]|$)/g, (m,p1,name,offset,whole)=>{
+        if(/(?:^|[\s,&])[A-Z]\.?$/.test(whole.slice(0, offset))) return m;
+        return p1 + name.charAt(0) + '.';
+      });
+      core = core.replace(/\b([A-Z][a-zA-Z'\u2019\-]+)\s+(?=[A-Z]\.(?:\s?[A-Z]\.)*(?:,|\s*&|\s*$))/g, '$1, ');
+      core = core.replace(/\b([A-Z])(?=[\s,&]|$)(?!\.)/g, '$1.');
+      core = core.replace(/([A-Z]\.)(?=[A-Z]\.)/g, '$1 ');
+      if(core !== before){
+        issues.push({sev:'warn', text:'Normalized author-name formatting to APA style ("Last name, F. M.") \u2014 added a missing comma and/or periods, shortened a spelled-out given name to an initial, and/or fixed spacing between initials.'});
+      }
+    }
+
+    // 4c-2. Second chance at the missing "&": a list that only became a clean run of
+    // "Surname, Initials." groups AFTER the fixes above (e.g. "Adam, M., Wessel M.,
+    // Benlian, A." -> the missing comma in "Wessel M." was just repaired) couldn't be
+    // recognized by the early check, which needs the segment to already be clean.
+    if(!/&/.test(core) && !/\band\b/i.test(core)){
+      let groups2 = core.match(/[A-Z][a-zA-Z'\u2019\-]+,\s*[A-Z]\.(?:\s*[A-Z]\.)*/g);
+      if(groups2 && groups2.length > 1 && groups2.join(', ') === core){
+        let last2 = groups2.pop();
+        core = groups2.join(', ') + ', & ' + last2;
+        issues.push({sev:'err', text:'Missing "&" before the final author \u2014 APA requires "&" (with a comma before it) before the last author in a reference-list entry, even when every author is separated only by commas.'});
+      }
+    }
+
+    newSegment = core + trailingWs;
+    if(newSegment !== authorSegment){
+      fixed = newSegment + restOfString;
+    }
+
+    // 4d. 21+ authors: APA 7 requires listing only the first 19, then an ellipsis (...),
+    // then the final author — no "&". Only attempted when the segment cleanly alternates
+    // "Surname, Initials" pairs (an even token count), so a mis-parsed name never gets guessed at.
+    // (Uses the un-stripped segment, not finalSegment, so the last author keeps its closing period.)
+    let countSegment = newSegment.trim();
+    let tokens = countSegment.split(',').map(t=>t.trim().replace(/^&\s*/,'')).filter(Boolean);
+    if(tokens.length >= 42 && tokens.length % 2 === 0){
+      let authorCount = tokens.length / 2;
+      if(authorCount > 20){
+        let firstAuthors = [];
+        for(let i=0;i<19;i++){
+          firstAuthors.push(tokens[i*2] + ', ' + tokens[i*2+1]);
+        }
+        let lastIdx = tokens.length - 2;
+        let lastAuthor = tokens[lastIdx] + ', ' + tokens[lastIdx+1];
+        if(!/\.$/.test(lastAuthor)) lastAuthor += '.';
+        let rebuilt = firstAuthors.join(', ') + ', \u2026 ' + lastAuthor;
+        fixed = rebuilt + ' ' + restOfString.replace(/^\s+/,'');
+        issues.push({sev:'err', text:`This reference lists ${authorCount} authors; APA 7 only lists the first 19, then an ellipsis (\u2026), then the final author, with no "&". Truncated automatically \u2014 please double-check against your source.`});
+      }
+    }
+  }
+
+  // 5. et al. usage note
+  if(/et al\.?/i.test(fixed)){
+    issues.push({sev:'note', text:'"et al." in a reference-list entry is only correct for 21+ authors (list the first 19, ellipsis, then the last author). Verify the author count.'});
+  }
+
+  // 6. DOI formatting: old dx.doi.org host, "doi:" prefix, or a bare DOI with no URL at all
+  if(/dx\.doi\.org/.test(fixed)){
+    fixed = fixed.replace(/https?:\/\/dx\.doi\.org\//,'https://doi.org/');
+    issues.push({sev:'warn', text:'DOI updated to the current format: https://doi.org/xxxx (drop "dx.").'});
+  }
+  if(/doi:\s*10\./i.test(fixed)){
+    fixed = fixed.replace(/doi:\s*(10\.\S+)/i,'https://doi.org/$1');
+    issues.push({sev:'warn', text:'DOI should be a full URL (https://doi.org/...), not prefixed with "doi:".'});
+  }
+  if(!/doi\.org/i.test(fixed)){
+    let bareDoi = fixed.match(/\b(10\.\d{4,9}\/[^\s]+?)[.\s]*$/);
+    if(bareDoi){
+      let doi = bareDoi[1].replace(/[.,;]+$/,'');
+      fixed = fixed.slice(0, bareDoi.index) + 'https://doi.org/' + doi;
+      issues.push({sev:'warn', text:'Wrapped the bare DOI as a full URL: https://doi.org/xxxx.'});
+    }
+  }
+
+  // 6b. arXiv preprints: normalize "arXiv:XXXX.XXXXX" (with or without the word "preprint")
+  //     into "arXiv. https://doi.org/10.48550/arXiv.XXXX.XXXXX", the current APA 7 format.
+  if(!/doi\.org\/10\.48550/i.test(fixed)){
+    let arxivMatch = fixed.match(/(?:arXiv\s+preprint\s+)?arXiv[:.]?\s*(\d{4}\.\d{4,5}(?:v\d+)?)/i);
+    if(arxivMatch){
+      let id = arxivMatch[1];
+      fixed = fixed.slice(0, arxivMatch.index) + 'arXiv. https://doi.org/10.48550/arXiv.' + id + fixed.slice(arxivMatch.index + arxivMatch[0].length);
+      issues.push({sev:'warn', text:'Formatted as an arXiv preprint: "arXiv." followed by the full arXiv DOI (https://doi.org/10.48550/arXiv.xxxxx.xxxxx) \u2014 the current APA 7 style.'});
+    }
+  }
+
+  // 7. "Retrieved from" (only needed for sources that change over time)
+  if(/Retrieved from/i.test(fixed) && !/Retrieved \w+ \d{1,2}, \d{4}, from/i.test(fixed)){
+    fixed = fixed.replace(/Retrieved from\s*/i,'');
+    issues.push({sev:'warn', text:'"Retrieved from" is only used for content likely to change (e.g. a wiki, a social media profile). For a stable webpage, just give the URL after the site name.'});
+  }
+
+  // 7b. Bare "www." URL missing its protocol
+  if(!/https?:\/\/www\./i.test(fixed) && /(^|\s)www\.[^\s]+/i.test(fixed)){
+    fixed = fixed.replace(/(^|\s)(www\.[^\s]+)/i, (m,pre,url)=>pre+'https://'+url);
+    issues.push({sev:'warn', text:'Added "https://" before the URL \u2014 APA reference URLs need the protocol.'});
+  }
+
+  // 8. Publisher location for books, e.g. ". New York, NY: Wiley." -> ". Wiley."
+  //    Anchored to the period before the city so it can't eat the title.
+  let locPub = fixed.match(/\.\s+[A-Z][a-zA-Z\s]{1,30},\s*[A-Z]{2}:\s*([A-Z][^.]+?)\.?\s*$/);
+  if(locPub){
+    fixed = fixed.slice(0, locPub.index) + '. ' + locPub[1].trim() + '.';
+    issues.push({sev:'err', text:'APA 7 dropped the publisher\u2019s city/state \u2014 list only the publisher name (e.g. "Wiley." not "New York, NY: Wiley.").'});
+  }
+
+  // 9. Page/number ranges take an EN DASH with NO spaces around it: "347-356", "347 - 356",
+  //    "347 \u2013 356", "347\u2014356", "347--356", "347 to 356" (after a comma, i.e. as a page range)
+  //    -> "347\u2013356". Also e-locator ranges ("e347-e356" -> "e347\u2013e356"). DOIs/URLs are
+  //    set aside first so a hyphen inside one ("10.1016/0022-2496") is never touched.
+  //    Done before comma insertion so the later rules see one clean, uniform range.
+  let sawHyphenRange = false, sawMissingDash = false;
+  {
+    const stash = [];
+    let masked = fixed.replace(/https?:\/\/\S+|\b10\.\d{4,9}\/\S+/g, m => { stash.push(m); return '\u0001' + (stash.length-1) + '\u0002'; });
+    masked = masked.replace(/(\b[eE]?\d+)\s*[-\u2010-\u2015\u2212]{1,3}\s*([eE]?\d+\b)/g, (m, x, y) => {
+      let good = x + '\u2013' + y;
+      if(m !== good) sawHyphenRange = true;
+      return good;
+    });
+    masked = masked.replace(/(,\s*)([eE]?\d+)\s+to\s+([eE]?\d+)(?=\s*(?:[.,;]|$|\u0001))/g, (m, c, x, y) => {
+      sawHyphenRange = true;
+      return c + x + '\u2013' + y;
+    });
+    // No dash at all between the two page numbers: "347 356" (just a space) or, right after an
+    // issue number, "347, 356" (a comma typed instead of a dash). Only treated as a range when
+    // the second number is larger than the first, so two unrelated numbers are never joined.
+    const num = t => parseInt(t.replace(/\D/g, ''), 10);
+    masked = masked.replace(/(\(\d+\)\s*,?\s*|\b\d+\s*,\s*)(?:pp?\.\s*)?([eE]?\d+)[ \t]+([eE]?\d+)(?=\s*(?:[.,;]|$|\u0001))/g, (m, pre, x, y) => {
+      if(num(y) > num(x)){ sawMissingDash = true; return pre + x + '\u2013' + y; }
+      return m;
+    });
+    masked = masked.replace(/(\(\d+\)\s*,\s*)(?:pp?\.\s*)?([eE]?\d+)\s*,\s*([eE]?\d+)(?=\s*(?:[.;]|$|\u0001))/g, (m, pre, x, y) => {
+      if(num(y) > num(x)){ sawMissingDash = true; return pre + x + '\u2013' + y; }
+      return m;
+    });
+    // Book chapters: "(pp. 3 15)" -> "(pp. 3\u201315)"
+    masked = masked.replace(/(\(pp?\.\s*)(\d+)[ \t]+(\d+)(?=\))/g, (m, pre, x, y) => {
+      if(num(y) > num(x)){ sawMissingDash = true; return pre + x + '\u2013' + y; }
+      return m;
+    });
+    fixed = masked.replace(/\u0001(\d+)\u0002/g, (m, i) => stash[+i]);
+  }
+  if(sawMissingDash){
+    issues.push({sev:'err', text:'Added the missing en dash (\u2013) between the first and last page numbers, e.g. 347\u2013356.'});
+  }
+  if(sawHyphenRange){
+    issues.push({sev:'warn', text:'Fixed the page range \u2014 APA uses an en dash (\u2013) with no spaces around it, e.g. 347\u2013356.'});
+  }
+
+  // 10. Comma between issue number and page range: "(3) 45–67" -> "(3), 45–67"
+  if(/\(\d+\)\s+\d+[\u2013-]\d+/.test(fixed)){
+    fixed = fixed.replace(/(\(\d+\))\s+(\d+[\u2013-]\d+)/, '$1, $2');
+    issues.push({sev:'warn', text:'Added the comma that should separate the issue number from the page range.'});
+  }
+
+  // 10b. "Vol." before a volume number — APA 7 uses the bare, italicized numeral only
+  const JOURNAL_VOL_RE = /\bVol\.?\s+(?=\d+(?:\s*\(\d+\)|\s*,\s*(?:No|Number|Issue|Iss)\.?\s*\d+)?\s*,\s*(?:pp?\.\s*)?(?:\d|e\d|Article))/i;
+  if(JOURNAL_VOL_RE.test(fixed)){
+    fixed = fixed.replace(JOURNAL_VOL_RE, '');
+    issues.push({sev:'warn', text:'Removed "Vol." \u2014 APA 7 gives just the italicized volume number, with no label.'});
+  }
+
+  // 10c. "pp." before a journal article's page range — that label is for book chapters, not articles
+  if(/\(\d+\),?\s*pp\.\s*\d/i.test(fixed)){
+    fixed = fixed.replace(/(\(\d+\),?\s*)pp\.\s*/i, '$1');
+    issues.push({sev:'warn', text:'Removed "pp." before the page range \u2014 journal articles list only the numbers; "pp." is reserved for book chapters.'});
+  }
+
+  // 10d. Quotation marks around the title — APA reference-list titles are never quoted
+  //      Re-match the year fresh here: rule 9 may have changed a hyphen inside a date
+  //      range (e.g. a conference's "14-16" -> "14–16"), which would make the original
+  //      yearMatch[0] text no longer findable and silently break the index below.
+  {
+    let freshYear = fixed.match(/\((\d{4}[a-z]?)(?:,\s*[^)]*)?\)/) || fixed.match(/\(n\.d\.\)/);
+    if(freshYear){
+      let yIdxQ = fixed.indexOf(freshYear[0]) + freshYear[0].length;
+      let quoteMatch = fixed.slice(yIdxQ).match(/^\.?\s*["\u201C]([^"\u201D]+)["\u201D]/);
+      if(quoteMatch){
+        fixed = fixed.slice(0,yIdxQ) + '. ' + quoteMatch[1] + fixed.slice(yIdxQ + quoteMatch[0].length);
+        issues.push({sev:'warn', text:'Removed quotation marks around the title \u2014 APA reference-list titles are never placed in quotes.'});
+      }
+    }
+  }
+
+  // 10e. Missing period after the article title. APA: "Title of the article. Journal Name, 5(2), 1\u201310."
+  //      The title runs into the journal name with either nothing ("...interactions Journal of
+  //      Things, 5(2)") or a comma ("...interactions, Journal of Things, 5(2)") between them.
+  //      The journal name is found by working back from the volume/issue/pages tail: a journal is
+  //      a run of Capitalized words (minor words like "of"/"the" allowed), and the last word of a
+  //      sentence-case title is lowercase, so the run stops there. Runs BEFORE rule 11 so that
+  //      the sentence-case pass sees the real title end and never lowercases the journal name.
+  //      If the boundary can't be determined safely (e.g. the whole title is in Title Case, so
+  //      title words and journal words look identical), nothing is guessed \u2014 an error is shown.
+  let titleBoundaryUnknown = false;
+  if(!hadAsterisks){
+    let fy10e = fixed.match(/\((\d{4}[a-z]?)(?:,\s*[^)]*)?\)/) || fixed.match(/\(n\.d\.\)/);
+    if(fy10e){
+      let yEnd = fixed.indexOf(fy10e[0]) + fy10e[0].length;
+      let tStart = yEnd + fixed.slice(yEnd).match(/^\.?\s*/)[0].length;
+      let rest10e = fixed.slice(tStart);
+      let vm = rest10e.match(new RegExp(',?\\s+' + VOL_ISSUE_SRC + '\\s*,\\s*(?:pp\\.\\s*)?(?:\\d|Article|e\\d)', 'i'));
+      if(vm){
+        let S = rest10e.slice(0, vm.index);
+        let sToks = S.split(/\s+/).filter(Boolean);
+        if(sToks.length >= 3 && !/\.\s/.test(S) && !/https?:|\(Eds?\.\)|(^|\s)In\s/.test(S)){
+          const isMinorTok = t => MINOR_WORDS.has(t.replace(/[^A-Za-z]/g,'').toLowerCase()) || t === '&';
+          const startsCap = t => /^[A-Z]/.test(t.replace(/^[^A-Za-z]+/,''));
+          let i = sToks.length;
+          while(i > 1){
+            let t = sToks[i-1];
+            if(i !== sToks.length && /[,:;?!]$/.test(t)) break;  // punctuation = end of the title side
+            if(startsCap(t) || isMinorTok(t)) i--; else break;
+          }
+          while(i < sToks.length && isMinorTok(sToks[i])) i++;    // leading "of/the/in" belong to the title
+          let titleToks = null, journalToks = null;
+          let prev = sToks[i-1];
+          if(i > 0 && i < sToks.length && prev && !startsCap(prev) && !isMinorTok(prev)){
+            titleToks = sToks.slice(0, i); journalToks = sToks.slice(i);   // last title word is lowercase: clean split
+          } else {
+            let lc = S.lastIndexOf(',');                                   // fall back to a comma between title and journal
+            if(lc > 0 && /^[A-Z]/.test(S.slice(lc+1).trim())){
+              titleToks = S.slice(0, lc).trim().split(/\s+/); journalToks = S.slice(lc+1).trim().split(/\s+/);
+            }
+          }
+          if(titleToks && journalToks.length){
+            let titleText = titleToks.join(' ').replace(/[,;]+$/, '');
+            if(!/[.?!]$/.test(titleText)) titleText += '.';
+            let before10e = fixed;
+            fixed = fixed.slice(0, tStart) + titleText + ' ' + journalToks.join(' ') + rest10e.slice(S.length);
+            if(fixed !== before10e) issues.push({sev:'err', text:'Added the missing period after the article title \u2014 APA needs "Title of the article. Journal Name, volume(issue), pages." Check that the journal name ("' + journalToks.join(' ') + '") starts where you expect.'});
+          } else {
+            titleBoundaryUnknown = true;
+            issues.push({sev:'err', text:'Could not tell where the article title ends and the journal name begins \u2014 APA needs a period after the title, before the journal name. Add it and run the check again.'});
+          }
+        }
+      }
+    }
+  }
+
+  // 11. Sentence case for article/chapter titles (Title Case -> sentence case), and making
+  //     sure the title's own first word is capitalized even when the rest is already lowercase.
+  //     Auto-converts: capitalizes only the first word and the first word after a colon,
+  //     lowercases everything else except words that look like acronyms (all caps, e.g. AI, PLS-SEM).
+  //     Re-matches the year fresh for the same reason as 10d above.
+  {
+    let freshYear = fixed.match(/\((\d{4}[a-z]?)(?:,\s*[^)]*)?\)/) || fixed.match(/\(n\.d\.\)/);
+    if(freshYear && !titleBoundaryUnknown){
+      let yearIdx = fixed.indexOf(freshYear[0]) + freshYear[0].length;
+    let afterYear = fixed.slice(yearIdx); // e.g. ". Dimensions of brand personality. Journal..."
+    let prefixMatch = afterYear.match(/^\.\s*/);
+    let prefixLen = prefixMatch ? prefixMatch[0].length : 0;
+    let titleStart = yearIdx + prefixLen;
+    let rest = fixed.slice(titleStart);
+    let dotIdx = findEnd(rest, false, false);
+    let titleGuess = dotIdx === -1 ? rest : rest.slice(0, dotIdx);
+    { // an edition/volume in parentheses after the title ("(Rev. ed.)", "(Vol. 3)") is not part of the title's casing
+      let edTail = titleGuess.match(/\s*\((?:[^)]*\b(?:eds?|edition|vols?|volume)\b[^)]*)\)\s*$/i);
+      if(edTail) titleGuess = titleGuess.slice(0, edTail.index);
+    }
+    if(titleGuess){
+      let words = titleGuess.trim().split(/\s+/).filter(w=>/^[A-Za-z]/.test(w));
+      if(words.length >= 3 && looksTitleCased(titleGuess)){
+        let sentenceCased = sentenceCaseTitle(titleGuess);
+        if(sentenceCased !== titleGuess){
+          fixed = fixed.slice(0, titleStart) + sentenceCased + fixed.slice(titleStart + titleGuess.length);
+          issues.push({sev:'warn', text:'The title was in Title Case; converted to sentence case (only the first word, the first word after a colon, and proper nouns stay capitalized \u2014 acronyms and well-known names like Amazon or YouTube are kept). Double-check any other proper nouns in it, such as people\u2019s names or lesser-known brands \u2014 automatic conversion can\u2019t always tell those apart from ordinary Title Case words.'});
+        }
+      } else {
+        // Already sentence case overall \u2014 fix only the small slips (first word, first word
+        // after a colon, a stray capital on a word like "And"/"The"/"Of").
+        let slipFixed = fixTitleSlips(titleGuess);
+        if(slipFixed !== titleGuess){
+          fixed = fixed.slice(0, titleStart) + slipFixed + fixed.slice(titleStart + titleGuess.length);
+          let firstAlphaIdx = titleGuess.search(/[A-Za-z]/);
+          let onlyFirst = firstAlphaIdx !== -1 && slipFixed.slice(0,firstAlphaIdx) + slipFixed.charAt(firstAlphaIdx).toLowerCase() + slipFixed.slice(firstAlphaIdx+1) === titleGuess;
+          issues.push({sev:'warn', text: onlyFirst
+            ? 'Capitalized the first word of the title \u2014 even in sentence case, APA always capitalizes the first word of a title.'
+            : 'Fixed capitalization in the title \u2014 APA sentence case capitalizes only the first word, the first word after a colon, and proper nouns.'});
+        }
+      }
+    }
+    }
+  }
+
+  // 12. Auto-italicize: journal article pattern " Journal Name, Vol(Issue), pages"
+  //     Comma before the volume is optional (a missing comma is a common typo) and is added back.
+  //     Journal name may start lower- or upper-case (a submitted reference is sometimes all
+  //     lowercase); titleCaseJournal() capitalizes each major word regardless of how it arrived.
+  //     Uses a lookahead for the digit after the trailing comma so it isn't consumed/lost.
+  let journalPattern = new RegExp("([.?!])\\s*([A-Za-z][A-Za-z0-9:&'\\-\\s]{2,60}?),?\\s+" + VOL_ISSUE_SRC + "(?:\\s*,)?(?=\\s*(?:\\d|Article|e\\d))", 'i');
+  let jm = fixed.match(journalPattern);
+  if(jm && !hadAsterisks){
+    let journalName = jm[2];
+    let properCase = titleCaseJournal(journalName);
+    if(properCase !== journalName){
+      issues.push({sev:'warn', text:`Journal names use Title Case, but minor words (of, in, and, the, ...) stay lowercase \u2014 changed to "${properCase}".`});
+    }
+    let volume = jm[3];
+    let issueNum = jm[4] || jm[5] || jm[6];
+    let issuePart = issueNum ? `(${issueNum})` : '';
+    let replacement = `${jm[1]} *${properCase}*, *${volume}*${issuePart},`;
+    if(jm[4] !== undefined ? jm[0].indexOf('(' + jm[4] + ')') === -1 : issueNum){
+      issues.push({sev:'warn', text:'Rewrote the volume and issue in APA form \u2014 the issue number goes in parentheses right after the italicized volume, with no space: e.g. *34*(3).'});
+    } else if(/\(\s|\s\)|\d\s+\(/.test(jm[0])){
+      issues.push({sev:'warn', text:'Removed the stray space around the issue number \u2014 APA writes volume and issue as *34*(3).'});
+    }
+    fixed = fixed.slice(0, jm.index) + replacement + fixed.slice(jm.index + jm[0].length);
+    issues.push({sev:'note', text:'Italicized the journal name and volume number (APA 7 italicizes both, but not the issue number in parentheses).'});
+  } else if(!hadAsterisks && /\bIn\s+Proceedings\s+of/i.test(fixed)){
+    // Conference paper published in proceedings: "In Proceedings of [Conference]. Publisher."
+    // Only the proceedings title is italicized — the paper title itself stays un-italicized
+    // (sentence case, handled separately by rule 11).
+    let procMatch = fixed.match(/\bIn\s+(Proceedings\s+of[^.]+?)\.\s*(.*)$/i);
+    if(procMatch){
+      let procTitle = procMatch[1];
+      fixed = fixed.slice(0, procMatch.index) + 'In *' + procTitle + '*. ' + procMatch[2].trim();
+      issues.push({sev:'note', text:'Italicized the conference proceedings title (e.g. "In *Proceedings of the X Conference*. Publisher.") \u2014 the paper title itself is not italicized.'});
+    }
+  } else if(!hadAsterisks && /\bIn\s+.*\(Eds?\.\)/i.test(fixed)){
+    // Book chapter: "Author. (Year). Title of chapter. In E. Editor (Ed.), Title of book (pp. x–y). Publisher."
+    // The chapter title (before "In") stays un-italicized; only the book title is italicized,
+    // and "pp." is correct here (unlike a journal article) so it's left in place.
+    let chapMatch = fixed.match(/\bIn\s+(.+?\(Eds?\.\),)\s*([A-Za-z][^(]+?)\s*(\(pp\.\s*[\d\u2013-]+\))?\.\s*(.*)$/i);
+    if(chapMatch){
+      let edClause = chapMatch[1];
+      let bookTitle = chapMatch[2].trim();
+      let ppClause = chapMatch[3] ? ' ' + chapMatch[3] : '';
+      let restText = chapMatch[4] ? chapMatch[4].trim() : '';
+      fixed = fixed.slice(0, chapMatch.index) + `In ${edClause} *${bookTitle}*${ppClause}. ${restText}`.replace(/\s{2,}/g,' ').trim();
+      issues.push({sev:'note', text:'Italicized the book title in this chapter reference (e.g. "In A. Editor (Ed.), *Title of book* (pp. 1\u201320). Publisher.") \u2014 the chapter title itself is not italicized.'});
+    }
+  } else if(/\[[^\]]*(?:presentation|poster|paper\s+session|symposium|keynote)[^\]]*\]/i.test(fixed)){
+    // Conference presentation / poster that was never published in proceedings, e.g.
+    // "Title of talk [Paper presentation]. Conference Name, City, Country."
+    // Nothing here is italicized in APA 7 — the title stays plain (already sentence-cased
+    // by rule 11), so there is nothing more to do in this branch.
+  } else if(!jm && !/\d\(\d+\)/.test(fixed) && !/\*\d+\*/.test(fixed)
+            && !/\*[^*]+\*,\s*\*?\d+\*?(?:\(\s*\d+\s*\))?\s*,/.test(fixed)
+            && !/\bIn\s+.*\(Eds?\.\)/i.test(fixed) && !/\bIn\s+\*?Proceedings\b/i.test(fixed)){
+    // Standalone work (book, report, webpage): "Author. (Year). *Title* (2nd ed.). Publisher. https://doi.org/..."
+    // Book rules: editor as author, no author, year only, italic sentence-case title, edition/volume,
+    // publisher name only (no city, no Inc./Co./Publishers), no e-reader/database, DOI/URL with no final period.
+    fixed = bookRules(fixed, issues, hadAsterisks);
+  }
+
+  // 12b. A period must close the page range (or article number) before a DOI/URL:
+  //      "100\u2013110 https://doi.org/..." / "100\u2013110, https://..." / "100\u2013110; https://..." -> "100\u2013110. https://..."
+  if(/\d[,;]?\s+https?:\/\//.test(fixed)){
+    fixed = fixed.replace(/(\d)[,;]?\s+(?=https?:\/\/)/, '$1. ');
+    issues.push({sev:'warn', text:'Added the period that must follow the page range (or article number) before the DOI/URL.'});
+  }
+  if(/\d\.https?:\/\//.test(fixed)){
+    fixed = fixed.replace(/(\d\.)(?=https?:\/\/)/, '$1 ');
+  }
+
+  // 12c. NO period (or comma/semicolon/space) after a DOI or URL that ends the reference.
+  if(/https?:\/\/\S*[^\s.,;:]\s*[.,;:\s]+$/.test(fixed)){
+    fixed = fixed.replace(/(https?:\/\/\S*[^\s.,;:])\s*[.,;:\s]+$/, '$1');
+    issues.push({sev:'warn', text:'Removed the punctuation after the DOI/URL \u2014 APA 7 puts no period (or any other mark) after a DOI or URL at the end of a reference.'});
+  }
+
+  // 13. Ensure entry ends with a period (unless ending in a URL/DOI). A stray trailing
+  //     comma/semicolon after the page range is replaced by the period rather than kept.
+  if(/[,;:]\s*$/.test(fixed) && !/https?:\/\/\S+$/.test(fixed)){
+    fixed = fixed.replace(/\s*[,;:]\s*$/, '.');
+    issues.push({sev:'warn', text:'Replaced the trailing punctuation with the closing period after the page range.'});
+  } else if(!/[.?!]\s*$/.test(fixed) && !/https?:\/\/\S+$/.test(fixed)){
+    fixed = fixed.trim() + '.';
+    issues.push({sev:'warn', text:'Added the period that closes the reference after the page range.'});
+  }
+
+  fixed = fixed.replace(/\s{2,}/g,' ').trim();
+  return {fixed, issues};
+}
+
+// ---------- Crossref cross-check: missing DOIs + publication year ----------
+// Uses Crossref's free public API (api.crossref.org, CORS-enabled).
+//  * A reference that already has a doi.org link is fetched by that DOI: its year is checked
+//    against Crossref's print/online/issued dates, and the DOI's title is compared with the
+//    reference's title so a DOI belonging to some other article is flagged.
+//  * A reference with NO DOI/URL is searched by title + first author. A match is only accepted
+//    when the title is near-exact AND the first author agrees (the year is then CHECKED, not
+//    required to match, so a wrong year no longer hides the article). The DOI is written as a
+//    full https://doi.org/... link after the closing period, with no period after it.
+const _norm = t => (t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/&amp;/g,' and ').replace(/<[^>]+>/g,' ').replace(/[^a-z0-9]+/g,' ').trim();
+function _dice(a, b){
+  const A = new Set(_norm(a).split(' ').filter(Boolean)), B = new Set(_norm(b).split(' ').filter(Boolean));
+  if(!A.size || !B.size) return 0;
+  let common = 0; A.forEach(w => { if(B.has(w)) common++; });
+  return 2 * common / (A.size + B.size);
+}
+function parseRefForDoi(fixed){
+  const ym = fixed.match(/\((\d{4})[a-z]?(?:,\s*[^)]*)?\)\.?\s*/);
+  if(!ym) return null;
+  const authorSeg = fixed.slice(0, ym.index).trim();
+  if(/\*/.test(authorSeg)) return null;   // no-author entry (title in the author position)
+  const surname = authorSeg.includes(',') ? authorSeg.split(',')[0].trim() : authorSeg.replace(/\.$/, '').trim();
+  const afterYear = fixed.slice(ym.index + ym[0].length).replace(/\*/g, '');
+  const stop = afterYear.search(/[.?!](\s|$)/);
+  let title = (stop === -1 ? afterYear : afterYear.slice(0, stop + (/[?!]/.test(afterYear[stop]) ? 1 : 0))).trim();
+  title = title.replace(/\s*\((?:[^)]*\b(?:eds?|edition|vols?|volume)\b[^)]*)\)\s*$/i, '');
+  const jm = fixed.slice(ym.index + ym[0].length).match(/\*([^*]+)\*,\s*\*\d+\*/);
+  if(!surname || title.split(/\s+/).length < 3) return null;
+  return {surname, year: parseInt(ym[1], 10), title, journal: jm ? jm[1] : ''};
+}
+function extractDoi(fixed){
+  const m = fixed.match(/https?:\/\/(?:dx\.)?doi\.org\/(10\.\d{4,9}\/\S+)/i);
+  return m ? m[1].replace(/[.,;:]+$/, '') : null;
+}
+function needsCrossref(fixed){
+  if(extractDoi(fixed)) return !!fixed.match(/\((\d{4})[a-z]?(?:,\s*[^)]*)?\)/);   // has a DOI -> verify its year
+  if(/https?:\/\/\S+/.test(fixed)) return false;                                  // some other URL (webpage etc.)
+  return !!parseRefForDoi(fixed);                                                 // no DOI -> try to find one
+}
+function _yearsOf(it){
+  const yr = k => { const dp = it[k] && it[k]['date-parts'] && it[k]['date-parts'][0]; return dp && dp[0] ? dp[0] : null; };
+  return {print: yr('published-print'), online: yr('published-online'), issued: yr('issued')};
+}
+// Compare the year written in the reference with Crossref's dates.
+//  ok          -> matches the issue (print) year, or the only year Crossref has
+//  online-only -> matches only the online-first year while the issue is dated later (a judgement call: note, don't change)
+//  wrong       -> matches none of Crossref's dates -> suggest/apply Crossref's issue year
+function evaluateYear(refYear, y){
+  const all = [y.print, y.online, y.issued].filter(Boolean);
+  if(!all.length) return {status:'unknown'};
+  if(y.print){
+    if(refYear === y.print) return {status:'ok', year: y.print};
+    if(all.includes(refYear)) return {status:'online-only', year: y.print, online: refYear};
+    return {status:'wrong', year: y.print};
+  }
+  if(all.includes(refYear)) return {status:'ok', year: refYear};
+  return {status:'wrong', year: y.issued || y.online};
+}
+async function lookupCrossref(fixed, fetchImpl){
+  const f = fetchImpl || (typeof fetch === 'function' ? fetch : null);
+  const ref = parseRefForDoi(fixed);
+  const yrM = fixed.match(/\((\d{4})[a-z]?(?:,\s*[^)]*)?\)/);
+  const refYear = yrM ? parseInt(yrM[1], 10) : null;
+  if(!f) return {error: true};
+  const doiInText = extractDoi(fixed);
+  const get = async url => {
+    const ctl = (typeof AbortController === 'function') ? new AbortController() : null;
+    const timer = ctl ? setTimeout(()=>ctl.abort(), 12000) : null;
+    try{
+      const resp = await f(url, ctl ? {signal: ctl.signal} : undefined);
+      if(timer) clearTimeout(timer);
+      if(resp.status === 404) return {notFound: true};
+      if(!resp.ok) return {error: true};
+      return {data: await resp.json()};
+    }catch(e){ if(timer) clearTimeout(timer); return {error: true}; }
+  };
+
+  // ---- A. Reference already has a DOI: fetch that exact work and verify it ----
+  if(doiInText){
+    const r = await get('https://api.crossref.org/works/' + doiInText.split('/').map(encodeURIComponent).join('/'));
+    if(r.error) return {error: true};
+    if(r.notFound) return {doiNotFound: true, refYear};
+    const it = r.data && r.data.message;
+    if(!it) return {error: true};
+    const t = Array.isArray(it.title) ? it.title.join(' ') : (it.title || '');
+    if(ref && t && _dice(ref.title, t) < 0.5) return {doiMismatch: true, foundTitle: t, refYear};
+    return {years: _yearsOf(it), refYear, hadDoi: true};
+  }
+
+  // ---- B. No DOI: search Crossref by title + first author ----
+  if(!ref) return {};
+  const r = await get('https://api.crossref.org/works?rows=5&select=DOI,title,author,issued,published-print,published-online,container-title'
+    + '&query.bibliographic=' + encodeURIComponent(ref.title + ' ' + ref.surname));
+  if(r.error || r.notFound) return {error: true};
+  const items = (r.data && r.data.message && r.data.message.items) || [];
+  let best = null, bestScore = 0;
+  for(const it of items){
+    if(!it.DOI) continue;
+    const t = Array.isArray(it.title) ? it.title.join(' ') : (it.title || '');
+    const titleScore = _dice(ref.title, t);
+    if(titleScore < 0.85) continue;                                   // title must be a near-exact match
+    const a0 = (it.author && it.author[0]) || null;
+    const authorOk = a0 ? (a0.family ? _norm(a0.family) === _norm(ref.surname) : _dice(a0.name || '', ref.surname) >= 0.6) : false;
+    if(!authorOk) continue;                                           // first author must agree
+    const yrs = _yearsOf(it);
+    let score = titleScore;
+    if([yrs.print, yrs.online, yrs.issued].includes(refYear)) score += 0.1;   // prefer the record whose year agrees
+    const cont = Array.isArray(it['container-title']) ? it['container-title'][0] : it['container-title'];
+    if(ref.journal && cont) score += 0.05 * _dice(ref.journal, cont);
+    if(score > bestScore){ best = it; bestScore = score; }
+  }
+  if(!best) return {};
+  return {doi: best.DOI.replace(/^https?:\/\/(dx\.)?doi\.org\//i, ''), years: _yearsOf(best), refYear};
+}
+// Turn a lookupCrossref() result into changes + messages on an analyze() result.
+function applyCrossref(a, res){
+  if(res.error){
+    a.issues.push({sev:'note', text:'Crossref could not be reached (offline or blocked network), so the DOI/year cross-check was skipped for this reference.'});
+    return;
+  }
+  if(res.doiNotFound){
+    a.issues.push({sev:'warn', text:'The DOI in this reference was not found on Crossref \u2014 check that it is typed correctly (it may also be registered with another agency, e.g. DataCite).'});
+    return;
+  }
+  if(res.doiMismatch){
+    a.issues.push({sev:'err', text:'The DOI in this reference belongs to a different article on Crossref ("' + res.foundTitle + '") \u2014 the DOI or the title is wrong. The year could not be checked.'});
+    return;
+  }
+  if(res.doi){
+    a.fixed = a.fixed.replace(/\s+$/, '') + ' https://doi.org/' + res.doi;   // period after the pages, NO period after the DOI
+    a.issues.push({sev:'warn', text:'No DOI was in this reference \u2014 added the one found on Crossref: https://doi.org/' + res.doi + ' . Confirm it points to the same article before you submit.'});
+  } else if(!res.hadDoi){
+    a.issues.push({sev:'note', text:'No DOI in this reference, and no confident match was found on Crossref. If the source has a DOI, add it as https://doi.org/\u2026'});
+    return;
+  }
+  if(res.years && res.refYear){
+    const ev = evaluateYear(res.refYear, res.years);
+    if(ev.status === 'ok'){
+      a.issues.push({sev:'note', text:'Year confirmed against Crossref (' + ev.year + ').'});
+    } else if(ev.status === 'online-only'){
+      a.issues.push({sev:'warn', text:'Year check: this reference says ' + res.refYear + ', which is when Crossref shows the article first appeared online, but its issue is dated ' + ev.year + '. APA gives the year of the version you cite \u2014 usually the issue/volume year (' + ev.year + '). Check which one applies.'});
+    } else if(ev.status === 'wrong'){
+      a.fixed = a.fixed.replace(/\((\d{4})([a-z]?)/, '(' + ev.year + '$2');
+      a.issues.push({sev:'err', text:'Year check: this reference says ' + res.refYear + ', but Crossref lists the article as published in ' + ev.year + ' \u2014 changed the year to ' + ev.year + '. Verify against the article itself.'});
+    }
+  }
+}
+
+function notesHtml(analyses){
+  const sevRank = {err:0, warn:1, note:2};
+  const total = analyses.reduce((n,a)=>n + a.issues.length, 0);
+  const blocks = analyses.map((a,i)=>{
+    const sorted = a.issues.slice().sort((x,y)=>sevRank[x.sev]-sevRank[y.sev]);
+    const errCount = a.issues.filter(x=>x.sev==='err').length;
+    const badge = errCount ? `<span class="badge">${errCount} to fix</span>` : (a.issues.length ? `<span class="badge">minor notes</span>` : `<span class="badge">looks clean</span>`);
+    const preview = a.fixed.replace(/\*/g,'').slice(0,60) + (a.fixed.length > 60 ? '\u2026' : '');
+    const list = sorted.length
+      ? `<ul class="issues">${sorted.map(x=>`<li class="sev-${x.sev}">${esc(x.text)}</li>`).join('')}</ul>`
+      : `<p class="clean">No issues detected by the automated checks.</p>`;
+    return `<div class="note-block"><div class="nh"><b>Reference ${i+1}</b> ${esc(preview)} ${badge}</div>${list}</div>`;
+  }).join('');
+  return `<details class="notes"><summary>What was changed (${total} note${total===1?'':'s'})</summary>${blocks}</details>`;
+}
+</script>
+</body>
+</html>
